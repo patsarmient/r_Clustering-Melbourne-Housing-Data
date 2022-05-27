@@ -1,0 +1,372 @@
+
+# Load data
+alldata = read.csv("melbourne_housing_FULL.csv",header=TRUE)
+alldata_clean = alldata[complete.cases(alldata),]
+print(str(alldata_clean))
+alldata_clean_sub = alldata_clean[,c("Price","Rooms","Bedroom2","Bathroom","BuildingArea", "Landsize","Car",
+                                        "YearBuilt","Distance")]
+print(str(alldata_clean_sub))
+
+# Create origin dataframe
+alldata_clean_sub_df <- data.frame(alldata_clean_sub)
+print(str(alldata_clean_sub_df))
+
+# Change datatype of Distance from Factor to Numeric
+alldata_clean_sub_df$Distance <- as.numeric(as.character(alldata_clean_sub_df$Distance))
+
+# Create work dataframe
+df_chk <- alldata_clean_sub_df
+df <- df_chk
+
+
+###############################################################################
+## Data Pre-Processing
+############################################################################### 
+
+colnames(df)
+# "Price"        "Rooms"        "Bedroom2"     "Bathroom"     "BuildingArea"   
+# "Landsize"     "Car"          "YearBuilt"    "Distance"  
+
+
+# Look at the distribution of each variable
+boxplot(df$Price, ylim=c(0,3000000)) # cap at 3M
+boxplot(df$Rooms) # cap at 7
+boxplot(df$Bedroom2) # cap at 7
+boxplot(df$Bathroom) # cap at 4
+boxplot(df$BuildingArea, ylim=c(0,400)) # cap at 350
+boxplot(df$Landsize, ylim=c(0,1400)) # cap at 1250
+boxplot(df$Car) # cap at 4
+boxplot(df$YearBuilt, ylim=c(1850,2020)) # cap at 1850
+boxplot(df$Distance) # cap at 30
+
+# Remove outliers that may skew the clustering results
+df <- df[! (df$Price>3000000), ]
+df <- df[! (df$Bedroom2>7), ]
+df <- df[! (df$Bathroom>4), ]
+df <- df[! (df$Landsize<20 | df$BuildingArea<20 | df$Landsize>1250 | df$BuildingArea>350), ]
+df <- df[! (df$Car>4), ]
+df <- df[! (df$YearBuilt<1850), ]
+df <- df[! (df$Distance>30), ]
+
+
+# Create correlation matrix + plot
+library(ggplot2)
+library(ggcorrplot)
+
+df_corr <- cor(df[, 1:9])
+head(round(df_corr, 2))
+
+ggcorrplot(df_corr, hc.order=FALSE, type="lower",
+           lab=TRUE, lab_size=3,
+           outline.col = "white",
+           ggtheme = ggplot2::theme_gray,
+           colors = c("#6D9EC1", "white", "#E46726"))
+
+
+# Rooms and Bedroom2 are highly correlated / Remove Bedroom2
+count(df[which(df$Rooms == df$Bedroom2), ])
+
+df <- subset(df, select=-c(Bedroom2))
+head(df)
+
+# Create correlation matrix to check + plot
+df_corr <- cor(df[, 1:8])
+head(round(df_corr, 2))
+
+ggcorrplot(df_corr, hc.order=FALSE, type="lower",
+           lab=TRUE, lab_size=3,
+           outline.col = "white",
+           ggtheme = ggplot2::theme_gray,
+           colors = c("#6D9EC1", "white", "#E46726"))
+
+
+# Add PriceRange descriptive column:
+df[order(-df$Price),]
+
+df$PriceR <- with(df, ifelse(
+  Price >= 0 & Price <= 399999, '100-300K', ifelse(
+    Price >= 400000 & Price <= 599999, '400-500K', ifelse(
+      Price >= 600000 & Price <= 799999, '600-700K', ifelse(
+        Price >= 800000 & Price <= 999999, '800-900K', ifelse(
+          Price >= 1000000 & Price <= 1499999, 'M1.0-M1.4', ifelse(
+            Price >= 1500000 & Price <= 1999999, 'M1.5-M1.9', 'M2+')))))))
+table(df$PriceR)
+
+# Add RoomsR descriptive column
+sort(unique(df$Rooms))
+
+df$RoomsR <- with(df, ifelse(
+  Rooms <= 1, '0-1', ifelse(
+    Rooms == 2, '2', ifelse(
+      Rooms == 3, '3', ifelse (
+        Rooms == 4, '4', ifelse(
+          Rooms == 5, '5', '6+'))))))
+table(df$RoomsR)
+
+# Add BathroomR descriptive column
+df$BathroomR <- with(df, ifelse(
+  Bathroom == 1, '1', ifelse(
+    Bathroom == 2, '2', ifelse(
+      Bathroom == 3, '3', '4'))))
+table(df$BathroomR)
+
+# Add BuildingAreaR descriptive column
+df$BuildingAreaR <- with(df, ifelse(
+  BuildingArea >= 50 & BuildingArea <= 99, '0-99m', ifelse(
+    BuildingArea >= 100 & BuildingArea <= 149, 'H100-149m', ifelse(
+      BuildingArea >= 150 & BuildingArea <= 199, 'H150-199m', ifelse(
+        BuildingArea >= 200 & BuildingArea <= 249, 'H200-249m', 'H250m+')))))
+table(df$BuildingAreaR)
+
+# Add LandsizeR descriptive column
+df$LandsizeR <- with(df, ifelse(
+  Landsize >= 50 & Landsize <= 99, '50-99m', ifelse(
+    Landsize >= 100 & Landsize <= 199, 'H100sm', ifelse(
+      Landsize >= 200 & Landsize <= 299, 'H200sm', ifelse(
+        Landsize >= 300 & Landsize <= 399, 'H300sm', ifelse (
+          Landsize >= 400 & Landsize <= 499, 'H400sm', ifelse(
+            Landsize >= 500 & Landsize <= 599, 'H500sm',ifelse(
+              Landsize >= 600 & Landsize <= 699, 'H600sm', 'H700sm+'))))))))
+table(df$LandsizeR)
+
+# Add CarR descriptive column
+sort(unique(df$Car))
+
+df$CarR <- with(df, ifelse(
+  Car == 0, '0', ifelse(
+    Car == 1, '1', ifelse(
+      Car == 2, '2', ifelse(
+        Car== 3, '3', '4')))))
+table(df$CarR)
+
+# Add YearBuiltR descriptive column 
+unique(sort(df$YearBuilt))
+
+df$YearBuiltR <- with(df, ifelse(
+  YearBuilt >= 1850 & YearBuilt <= 1919, '1850-1910s', ifelse(
+    YearBuilt >= 1920 & YearBuilt <= 1939, '1920-1930s', ifelse(
+      YearBuilt >= 1940 & YearBuilt <= 1959, '1940-1950s', ifelse(
+        YearBuilt >= 1960 & YearBuilt <= 1979, '1960-1970s', ifelse(
+          YearBuilt >= 1980 & YearBuilt <= 1999, '1980-1990s', ifelse(
+            YearBuilt >= 2000 & YearBuilt <= 2009, '2000s', '2010s+')))))))
+table(df$YearBuiltR)
+
+# Add DistanceR descriptive column
+df$DistanceR <- with(df, ifelse(
+  Distance >= 0.0 & Distance <= 9.9, '0km', ifelse(
+    Distance >= 10.0 & Distance <= 19.9, '10km', '20km+')))
+table(df$DistanceR)
+
+
+###############################################################################
+## EDA
+############################################################################### 
+
+# Numeric data for clustering
+df_data <- df[ ,1:8]
+
+# Scale data
+df_scaled <- scale(df_data)
+# rownames(df_scaled) <- paste(df_labels$PriceR, 1:dim(df)[1], sep="_")
+
+# Calculate distance
+df_dist <- dist(df_scaled, method='euclidean')
+
+
+# Scatter plots to understand the data better
+library(viridis)          
+
+# Trend: New homes are cheaper and bigger than older homes 
+ggplot(df, aes(x=BuildingArea, y=Price)) + 
+  geom_point(aes(colour=YearBuiltR), size=3) +
+  scale_color_brewer(palette = "RdBu") 
+ggsave("eda_buildarea_price_by_yearbuilt_plot.png")
+
+# Trend: Ther farther from CBD the more cheaper and newer homes there are
+ggplot(df, aes(x=Distance, y=Price)) + 
+  geom_point(aes(colour=YearBuiltR), size=3) +
+  scale_color_brewer(palette = "RdBu")
+ggsave("eda_dist_price_by_yearbuilt_plot.png")
+
+# Trend: Newer homes have more bedrooms at a lower cost than older homes
+ggplot(df, aes(x=YearBuilt, y=Price)) + 
+  geom_point(aes(colour=RoomsR), size=3) +
+  scale_color_brewer(palette = "RdBu")
+ggsave("eda_yearbuilt_price_by_rooms_plot.png")
+
+
+###############################################################################
+## K-Means Clustering
+###############################################################################
+library(factoextra) 
+
+# Check number of clusters to use
+# Elbow method
+set.seed(0)
+fviz_nbclust(df_scaled, kmeans, method = "wss")
+ggsave("km_elbow_method_plot.png")
+
+# KM 3 Clusters
+set.seed(1)
+km3 <- kmeans(df_scaled, centers=3, iter.max=100, nstart=10)
+
+km3_cl <- km3$cluster
+km3_cl_df <- cbind(df, km3_cl)
+km3_cl_df$km3_cl <- as.factor(km3_cl_df$km3_cl)
+
+ggplot(km3_cl_df,
+  aes(x=BuildingArea, y=Price, colour=km3_cl, shape=km3_cl)) +
+  geom_point(position = 'jitter') +
+  theme_bw() +
+  labs(shape="cluster", colour="cluster")
+
+
+# KM 4 Clusters
+set.seed(2)
+km4 <- kmeans(df_scaled, centers=4, iter.max=100, nstart=10)
+
+km4_cl <- km4$cluster
+km4_cl_df <- cbind(df, km4_cl)
+km4_cl_df$km4_cl <- as.factor(km4_cl_df$km4_cl)
+
+ggplot(km4_cl_df,
+  aes(x=BuildingArea, y=Price , colour=km4_cl, shape=km4_cl)) +
+  geom_point(position='jitter') +
+  theme_bw() +
+  labs(shape="cluster", colour="cluster")
+
+
+# KM 5 Clusters
+set.seed(3)
+km5 <- kmeans(df_scaled, centers=5, iter.max=100, nstart=10)
+
+km5_cl <- km5$cluster
+km5_cl_df <- cbind(df, km5_cl)
+km5_cl_df$km5_cl <- as.factor(km5_cl_df$km5_cl)
+
+ggplot(km5_cl_df,
+  aes(x=BuildingArea, y=Price , colour=km5_cl, shape=km5_cl)) +
+  geom_point(position='jitter') +
+  theme_bw() +
+  labs(shape="cluster", colour="cluster")
+
+
+# KM No of Cluster Comparison
+library(cowplot)
+p1 <- fviz_cluster(list(data=df_data, cluster=km3_cl)) + theme_minimal()
+p2 <- fviz_cluster(list(data=df_data, cluster=km4_cl)) + theme_minimal()
+p3 <- fviz_cluster(list(data=df_data, cluster=km5_cl)) + theme_minimal() 
+plot_grid(p1, p2, p3, labels = c("k=3", "k=4", "k=5"))
+ggsave("km_compare_k_clusters_plot.png")
+
+
+#Plot average difference and boxtplot distributions of clusters for variables
+library(viridis)          
+library(patchwork)
+library(dplyr)
+library(GGally)
+
+km_cl_stat <- km4_cl_df %>%
+  group_by(km4_cl) %>%
+  summarize_if(is.numeric, mean, na.rm=TRUE)
+km_cl_stat
+
+ggparcoord(km_clust_stat, columns = c(3,4,7,9), 
+  groupColumn ="km4_cl", scale="globalminmax", order="skewness") +
+  theme(axis.text.x = element_text(angle=45, vjust=1, hjust=1))
+
+p4 <- ggplot(km4_cl_df, aes(x=km4_cl, y=Price, fill=km4_cl)) + 
+  geom_boxplot() + ggtitle('Cluster by Price')
+
+p5 <- ggplot(km4_cl_df, aes(x=km4_cl, y=Distance, fill=km4_cl)) + 
+  geom_boxplot() + ggtitle('Cluster by Distance from City Center')
+
+p6 <- ggplot(km4_cl_df, aes(x=km4_cl, y=BuildingArea, fill=km4_cl)) + 
+  geom_boxplot() + ggtitle('Cluster by Building Area')
+
+p7 <- ggplot(km4_cl_df, aes(x=km4_cl, y=Landsize, fill=km4_cl)) + 
+  geom_boxplot() + ggtitle('Cluster by Landsize')
+
+p8 <- ggplot(km4_cl_df, aes(x=km4_cl, y=Rooms, fill=km4_cl)) + 
+  geom_boxplot() + ggtitle('Cluster by Rooms')
+
+p9 <- ggplot(km4_cl_df, aes(x=km4_cl, y=Bathroom, fill=km4_cl)) + 
+  geom_boxplot() + ggtitle('Cluster by Bathrooms')
+
+p10 <- ggplot(km4_cl_df, aes(x=km4_cl, y=Car, fill=km4_cl)) + 
+  geom_boxplot() + ggtitle('Cluster by Car Parking Spaces')
+
+p11 <- ggplot(km4_cl_df, aes(x=km4_cl, y=YearBuilt, fill=km4_cl)) + 
+  geom_boxplot() + ggtitle('Cluster by Year Built')
+
+p4 + p5 + p6 + p7 + plot_layout(ncol=2)
+
+p8 + p9 + p10+ p11 + plot_layout(ncol=2)
+
+
+# Query distributions of clusters for variables
+table(km4_cl, km4_cl_df$YearBuiltR)
+table(km4_cl, km4_cl_df$PriceR)
+table(km4_cl, km4_cl_df$DistanceR)
+
+colnames(df)
+# [1]   "Price"         "Rooms"         "Bathroom"      "BuildingArea"  "Landsize"     
+# [6]   "Car"           "YearBuilt"     "Distance"      "PriceR"        "RoomsR"       
+# [11]  "BathroomR"     "BuildingAreaR" "LandsizeR"     "CarR"          "YearBuiltR"   
+# [16]  "DistanceR"    
+
+
+###############################################################################
+## Hierarchical Clustering
+###############################################################################
+
+library(tidyverse)
+
+set.seed(1)
+hc3 <- hclust(df_dist, method='complete')
+plot(hc3, hang=-0.01, cex=0.5)
+rect.hclust(hc3, k=3, border='red')
+
+hc3_cl <- cutree(hc3, k=3)
+table(hc3_cl)
+
+hc3_cl_df <- df %>%
+  add_column("hc3_cl"=factor(hc3_cl))
+
+
+set.seed(2)
+hc4 <- hclust(df_dist, method='complete')
+plot(hc4, hang=-0.01, cex=0.5)
+rect.hclust(hc4, k=4, border='red')
+
+hc4_cl<- cutree(hc4, k=4)
+table(hc4_cl)
+
+hc4_cl_df <- df %>%
+  add_column("hc4_cl"=factor(hc4_cl))
+
+
+# Summary of clusters by property feature
+table(hc4_cl_df$hc4_cl, hc4_cl_df$PriceR)
+table(hc4_cl_df$hc4_cl, hc4_cl_df$DistanceR)
+
+
+# Hierarchical Cluster Stat Analysis (mean, meadian, max, min)
+hc4_cl_df %>% group_by(hc4_cl) %>% 
+  summarise(
+    n = n(),
+    price = mean(Price),
+    rooms  = mean(Rooms),
+    bathr  = mean(Bathroom),
+    buildA = mean(BuildingArea),
+    landS = mean(Landsize),
+    car = mean(Car),
+    yearB = mean(YearBuilt),
+    dist = mean(Distance)
+  )
+
+# Hierarchical Cluster Mean Analysis by Attribute
+hc4_cl_df %>% group_by(hc4_cl, RoomsR) %>% tally() %>% 
+  mutate(perc_in_cluster = round((n / sum(n)*100), 2)) %>%
+  ungroup() %>% group_by(RoomsR) %>% 
+  mutate(perc_in_all = round((n / sum(n)*100), 2))
