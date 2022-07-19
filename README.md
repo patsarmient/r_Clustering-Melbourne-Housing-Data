@@ -9,6 +9,7 @@ and their corresponding property preferences.
 ## Documentation
 
 - [Code](https://github.com/patsarmient/R-Clustering-Melbourne-Housing/blob/main/Rcode.txt)
+- [Data](https://github.com/patsarmient/R-Clustering-Melbourne-Housing/blob/main/Melbourne_housing_FULL.csv)
 - [Research Analysis](https://github.com/patsarmient/R-Clustering-Melbourne-Housing/blob/main/Research_Summary.pdf)
 
 ## Results
