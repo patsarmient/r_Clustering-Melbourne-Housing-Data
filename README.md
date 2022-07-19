@@ -2,8 +2,8 @@
 ## Identifying Distinct Property Buyers using K-means and Hierarchical Clustering Analysis
 
 Comparative analysis between K-Means Clustering and 
-Hierarchical Clustering Analysis (HCA) methods on the online property sales 
-data from Melbourne, Australia to identify distinct market segments 
+Hierarchical Clustering Analysis (HCA) methods on an online property sales 
+dataset from Melbourne, Australia to identify distinct housing market segments 
 and their corresponding property preferences.
 
 ## Documentation
